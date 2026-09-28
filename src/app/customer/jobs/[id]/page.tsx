@@ -9,10 +9,12 @@ import {
   cancelJobAction,
   completeJobAction,
   declineRequestAction,
+  inviteTradespersonAction,
   sendMessageAction,
   submitReviewAction,
 } from '@/app/actions/jobs';
 import {
+  getDirectory,
   getDirectoryEntry,
   getJob,
   getJobRequests,
@@ -50,6 +52,15 @@ export default async function CustomerJobPage({
 
   const pending = requests.filter((r) => r.status === 'pending');
   const back = `/customer/jobs/${job.id}`;
+
+  // verified tradies in this trade who have not been contacted yet
+  const alreadyContacted = new Set(requests.map((r) => r.tradesperson_id));
+  const suggestions =
+    job.status === 'open'
+      ? (await getDirectory({ categoryId: job.category_id, verifiedOnly: true, limit: 6 }))
+          .filter((t) => !alreadyContacted.has(t.user_id))
+          .slice(0, 3)
+      : [];
 
   return (
     <div>
@@ -135,7 +146,7 @@ export default async function CustomerJobPage({
                   Responses {pending.length > 0 && `(${pending.length})`}
                 </p>
                 <Link href="/browse" className="text-xs font-semibold text-brand-600 hover:underline">
-                  Invite another tradie →
+                  Browse all tradies →
                 </Link>
               </div>
 
@@ -194,6 +205,42 @@ export default async function CustomerJobPage({
                     {req.status === 'pending' && req.origin === 'customer_invite' && (
                       <p className="mt-2 text-xs text-ink-400">Waiting for the tradie to accept.</p>
                     )}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {suggestions.length > 0 && (
+            <Card>
+              <p className="font-semibold text-ink-900">Invite a verified tradie to this job</p>
+              <p className="mt-1 text-xs text-ink-400">
+                They get the job in their dashboard and can accept it straight away.
+              </p>
+              <ul className="mt-3 divide-y divide-ink-100">
+                {suggestions.map((tradie) => (
+                  <li key={tradie.user_id} className="flex flex-wrap items-center gap-3 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="flex items-center gap-2 truncate font-medium text-ink-900">
+                        {tradie.full_name} <VerifiedBadge status={tradie.verified_status} />
+                      </p>
+                      <p className="text-xs text-ink-400">
+                        {tradie.categories.join(' · ')} · {tradie.jobs_completed} jobs ·{' '}
+                        {tradie.rating_count > 0 ? `${Number(tradie.rating_avg).toFixed(1)}★` : 'new'}
+                      </p>
+                    </div>
+                    <form action={inviteTradespersonAction}>
+                      <input type="hidden" name="job_id" value={job.id} />
+                      <input type="hidden" name="tradesperson_id" value={tradie.user_id} />
+                      <input
+                        type="hidden"
+                        name="message"
+                        value="Are you available for this job?"
+                      />
+                      <SubmitButton className="tc-btn-ghost px-3 py-2 text-xs" pendingLabel="Sending…">
+                        Send request
+                      </SubmitButton>
+                    </form>
                   </li>
                 ))}
               </ul>

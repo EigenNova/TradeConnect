@@ -32,9 +32,37 @@ export const getSession = cache(async (): Promise<Session | null> => {
     .eq('user_id', user.id)
     .maybeSingle();
 
-  if (!profile) return null;
+  if (profile) {
+    return { userId: user.id, email: user.email ?? '', profile: profile as Profile };
+  }
 
-  return { userId: user.id, email: user.email ?? '', profile: profile as Profile };
+  // Self-heal: the handle_new_user trigger normally creates this row. If it is
+  // missing (e.g. the account predates the migration) rebuild it from the auth
+  // metadata instead of bouncing the user between /login and the dashboard.
+  const meta = (user.user_metadata ?? {}) as Record<string, string>;
+  const role: Role = meta.role === 'tradesperson' ? 'tradesperson' : 'customer';
+
+  const { data: created } = await supabase
+    .from('profiles')
+    .insert({
+      user_id: user.id,
+      role,
+      full_name: meta.full_name ?? user.email?.split('@')[0] ?? '',
+      phone: meta.phone ?? null,
+      city: meta.city ?? 'Lae',
+    })
+    .select('*')
+    .maybeSingle();
+
+  if (!created) return null;
+
+  if (role === 'tradesperson') {
+    await supabase
+      .from('tradesperson_profiles')
+      .insert({ user_id: user.id, service_area: meta.city ?? 'Lae' });
+  }
+
+  return { userId: user.id, email: user.email ?? '', profile: created as Profile };
 });
 
 export async function requireUser(next = '/'): Promise<Session> {

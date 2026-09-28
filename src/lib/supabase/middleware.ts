@@ -65,9 +65,10 @@ export async function updateSession(request: NextRequest) {
       .eq('user_id', user.id)
       .maybeSingle();
 
-    const role = (profile?.role as string | undefined) ?? 'customer';
+    const role = profile?.role as string | undefined;
 
-    if (role !== gate.role) {
+    // No profile row yet — let the page self-heal it instead of looping.
+    if (role && role !== gate.role) {
       const url = request.nextUrl.clone();
       url.pathname = HOME_FOR_ROLE[role] ?? '/';
       url.search = '?denied=1';
@@ -83,8 +84,10 @@ export async function updateSession(request: NextRequest) {
       .eq('user_id', user.id)
       .maybeSingle();
 
+    if (!profile?.role) return response;
+
     const url = request.nextUrl.clone();
-    url.pathname = HOME_FOR_ROLE[(profile?.role as string) ?? 'customer'] ?? '/';
+    url.pathname = HOME_FOR_ROLE[profile.role as string] ?? '/';
     url.search = '';
     return NextResponse.redirect(url);
   }

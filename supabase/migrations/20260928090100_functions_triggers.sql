@@ -673,13 +673,13 @@ begin
     raise exception 'Job not found';
   end if;
 
-  if new.sender_id not in (v_job.customer_id, coalesce(v_job.assigned_tradesperson_id, new.sender_id))
-     or (v_job.assigned_tradesperson_id is null and new.sender_id <> v_job.customer_id) then
-    raise exception 'Only job participants can send messages';
-  end if;
-
   if v_job.assigned_tradesperson_id is null then
     raise exception 'Chat opens once a tradesperson is assigned';
+  end if;
+
+  if new.sender_id <> v_job.customer_id
+     and new.sender_id <> v_job.assigned_tradesperson_id then
+    raise exception 'Only job participants can send messages';
   end if;
 
   new.receiver_id := case
